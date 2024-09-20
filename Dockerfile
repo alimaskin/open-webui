@@ -125,20 +125,28 @@ RUN if [ "$USE_OLLAMA" = "true" ]; then \
 COPY --chown=$UID:$GID ./backend/requirements.txt ./requirements.txt
 
 RUN pip3 install uv && \
+    echo "Installed uv" && \
     if [ "$USE_CUDA" = "true" ]; then \
-    # If you use CUDA the whisper and embedding model will be downloaded on first use
+    echo "Using CUDA" && \
     pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/$USE_CUDA_DOCKER_VER --no-cache-dir && \
+    echo "Installed PyTorch with CUDA" && \
     uv pip install --system -r requirements.txt --no-cache-dir && \
+    echo "Installed requirements with CUDA" && \
     python -c "import os; from sentence_transformers import SentenceTransformer; SentenceTransformer(os.environ['RAG_EMBEDDING_MODEL'], device='cpu')" && \
+    echo "Loaded sentence transformer with CUDA" && \
     python -c "import os; from faster_whisper import WhisperModel; WhisperModel(os.environ['WHISPER_MODEL'], device='cpu', compute_type='int8', download_root=os.environ['WHISPER_MODEL_DIR'])"; \
     else \
+    echo "Using CPU" && \
     pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --no-cache-dir && \
+    echo "Installed PyTorch for CPU" && \
     uv pip install --system -r requirements.txt --no-cache-dir && \
+    echo "Installed requirements for CPU" && \
     python -c "import os; from sentence_transformers import SentenceTransformer; SentenceTransformer(os.environ['RAG_EMBEDDING_MODEL'], device='cpu')" && \
+    echo "Loaded sentence transformer with CPU" && \
     python -c "import os; from faster_whisper import WhisperModel; WhisperModel(os.environ['WHISPER_MODEL'], device='cpu', compute_type='int8', download_root=os.environ['WHISPER_MODEL_DIR'])"; \
     fi; \
+    echo "Installation complete" && \
     chown -R $UID:$GID /app/backend/data/
-
 
 
 # copy embedding weight from build
