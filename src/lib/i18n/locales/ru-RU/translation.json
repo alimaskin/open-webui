@@ -497,6 +497,7 @@
 	"Positive attitude": "Позитивный настрой",
 	"Previous 30 days": "Предыдущие 30 дней",
 	"Previous 7 days": "Предыдущие 7 дней",
+	"Pricing": "Тарифы",
 	"Profile Image": "Изображение профиля",
 	"Prompt": "Промпт",
 	"Prompt (e.g. Tell me a fun fact about the Roman Empire)": "Промпт (например, Расскажи мне интересный факт о Римской империи)",
@@ -755,6 +756,7 @@
 	"You're now logged in.": "Вы вошли в систему.",
 	"Your account status is currently pending activation.": "В настоящее время ваша учетная запись ожидает активации.",
 	"Your entire contribution will go directly to the plugin developer; Open WebUI does not take any percentage. However, the chosen funding platform might have its own fees.": "Весь ваш взнос будет направлен непосредственно разработчику плагина; Open WebUI не взимает никаких процентов. Однако выбранная платформа финансирования может иметь свои собственные сборы.",
+	"Your Plan": "Ваш тариф",
 	"Youtube": "YouTube",
 	"Youtube Loader Settings": "Настройки загрузчика YouTube"
 }
