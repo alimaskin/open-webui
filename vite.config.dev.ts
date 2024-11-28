@@ -29,12 +29,12 @@ export default defineConfig({
 	server: {
 		proxy: {
 			'/static': {
-				target: 'http://localhost:8080', // Проксирование запросов на бэкенд
+				target: process.env.VITE_API_TARGET || 'http://localhost:8080',
 				changeOrigin: true,
 				rewrite: (path) => path.replace(/^\/static/, '/static')
 			},
 			'/api': {
-				target: 'http://localhost:8080', // Проксирование API запросов на бэкенд
+				target: process.env.VITE_API_TARGET || 'http://localhost:8080',
 				changeOrigin: true,
 				rewrite: (path) => path.replace(/^\/api/, '/api')
 			}
