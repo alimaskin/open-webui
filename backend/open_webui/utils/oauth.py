@@ -27,6 +27,7 @@ from open_webui.config import (
     OAUTH_ALLOWED_ROLES,
     OAUTH_ADMIN_ROLES,
     WEBHOOK_URL,
+    FRONTEND_URL,
     JWT_EXPIRES_IN,
     AppConfig,
 )
@@ -51,7 +52,6 @@ auth_manager_config.OAUTH_ALLOWED_ROLES = OAUTH_ALLOWED_ROLES
 auth_manager_config.OAUTH_ADMIN_ROLES = OAUTH_ADMIN_ROLES
 auth_manager_config.WEBHOOK_URL = WEBHOOK_URL
 auth_manager_config.JWT_EXPIRES_IN = JWT_EXPIRES_IN
-
 
 class OAuthManager:
     def __init__(self):
@@ -253,9 +253,10 @@ class OAuthManager:
             secure=WEBUI_SESSION_COOKIE_SECURE,
         )
 
-        # Redirect back to the frontend with the JWT token
-        redirect_url = f"{request.base_url}auth#token={jwt_token}"
+        frontend_base = FRONTEND_URL.value if FRONTEND_URL.value else str(request.base_url).rstrip('/')
+        redirect_url = f"{frontend_base}/auth#token={jwt_token}"
         return RedirectResponse(url=redirect_url)
+
 
 
 oauth_manager = OAuthManager()
