@@ -336,7 +336,7 @@ export const userSignOut = async () => {
 	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
-			return res;
+			return res.json();
 		})
 		.catch((err) => {
 			console.log(err);
@@ -347,6 +347,10 @@ export const userSignOut = async () => {
 	if (error) {
 		throw error;
 	}
+
+	if (res && res.redirect_url) {
+        window.location.href = res.redirect_url;
+    }
 };
 
 export const addUser = async (

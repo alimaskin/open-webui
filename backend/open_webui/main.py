@@ -80,6 +80,7 @@ from open_webui.config import (
     ENV,
     FRONTEND_BUILD_DIR,
     OAUTH_PROVIDERS,
+    OAUTH_EXCLUSIVE_AUTH,
     STATIC_DIR,
     TASK_MODEL,
     TASK_MODEL_EXTERNAL,
@@ -1482,7 +1483,7 @@ async def chat_completed(form_data: dict, user=Depends(get_verified_user)):
             valves = Functions.get_function_valves_by_id(filter_id)
             function_module.valves = function_module.Valves(
                 **(valves if valves else {})
-            )
+        )
 
         if not hasattr(function_module, "outlet"):
             continue
@@ -2486,7 +2487,8 @@ async def get_app_config(request: Request):
             "providers": {
                 name: config.get("name", name)
                 for name, config in OAUTH_PROVIDERS.items()
-            }
+            },
+            "exclusive_auth": OAUTH_EXCLUSIVE_AUTH.value
         },
         "features": {
             "auth": WEBUI_AUTH,

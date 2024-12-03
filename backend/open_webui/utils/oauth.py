@@ -30,6 +30,7 @@ from open_webui.config import (
     FRONTEND_URL,
     JWT_EXPIRES_IN,
     AppConfig,
+    OAUTH_EXCLUSIVE_AUTH,
 )
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import WEBUI_SESSION_COOKIE_SAME_SITE, WEBUI_SESSION_COOKIE_SECURE
@@ -67,6 +68,16 @@ class OAuthManager:
                 },
                 redirect_uri=provider_config["redirect_uri"],
             )
+
+    def _enforce_exclusive_mode(self, provider: str = None):
+        """Enforce settings required for exclusive mode"""
+        if OAUTH_EXCLUSIVE_AUTH.value:
+            auth_manager_config.OAUTH_MERGE_ACCOUNTS_BY_EMAIL = True
+            auth_manager_config.ENABLE_OAUTH_ROLE_MANAGEMENT = True
+
+            # Check provider if specified
+            if provider and provider != 'oidc':
+                raise HTTPException(404, "Only OIDC provider is allowed in exclusive mode")
 
     def get_client(self, provider_name):
         return self.oauth.create_client(provider_name)
@@ -120,7 +131,10 @@ class OAuthManager:
     async def handle_login(self, provider, request):
         if provider not in OAUTH_PROVIDERS:
             raise HTTPException(404)
-        # If the provider has a custom redirect URL, use that, otherwise automatically generate one
+            
+        self._enforce_exclusive_mode(provider)
+
+        # Keep existing redirect URI logic
         redirect_uri = OAUTH_PROVIDERS[provider].get("redirect_uri") or request.url_for(
             "oauth_callback", provider=provider
         )
@@ -132,6 +146,10 @@ class OAuthManager:
     async def handle_callback(self, provider, request, response):
         if provider not in OAUTH_PROVIDERS:
             raise HTTPException(404)
+        
+        self._enforce_exclusive_mode(provider)
+        
+        # Keep all existing callback logic unchanged
         client = self.get_client(provider)
         try:
             token = await client.authorize_access_token(request)
@@ -256,7 +274,6 @@ class OAuthManager:
         frontend_base = FRONTEND_URL.value if FRONTEND_URL.value else str(request.base_url).rstrip('/')
         redirect_url = f"{frontend_base}/auth#token={jwt_token}"
         return RedirectResponse(url=redirect_url)
-
 
 
 oauth_manager = OAuthManager()

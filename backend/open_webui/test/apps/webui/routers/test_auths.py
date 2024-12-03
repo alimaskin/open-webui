@@ -1,5 +1,6 @@
 from test.util.abstract_integration_test import AbstractPostgresTest
 from test.util.mock_user import mock_webui_user
+import mock
 
 
 class TestAuths(AbstractPostgresTest):
@@ -198,3 +199,88 @@ class TestAuths(AbstractPostgresTest):
             response = self.fast_api_client.get(self.create_url("/api_key"))
         assert response.status_code == 200
         assert response.json() == {"api_key": "abc"}
+
+    def test_oauth_exclusive_mode(self):
+        # Mock OAUTH_EXCLUSIVE_AUTH to True
+        with mock.patch("open_webui.config.OAUTH_EXCLUSIVE_AUTH.value", True):
+            # Test that non-OIDC providers are blocked
+            response = self.fast_api_client.get(
+                self.create_url("/oauth/google/login")
+            )
+            assert response.status_code == 404
+            
+            # Test that OIDC provider works
+            response = self.fast_api_client.get(
+                self.create_url("/oauth/oidc/login")
+            )
+            assert response.status_code == 302  # Should redirect to provider
+            
+            # Test that local auth endpoints are still accessible but return 404
+            response = self.fast_api_client.post(
+                self.create_url("/signin"),
+                json={"email": "test@test.com", "password": "test"}
+            )
+            assert response.status_code == 404
+
+    def test_oauth_normal_mode(self):
+        # Mock OAUTH_EXCLUSIVE_AUTH to False (default behavior)
+        with mock.patch("open_webui.config.OAUTH_EXCLUSIVE_AUTH.value", False):
+            # Test that all providers work
+            for provider in ["google", "microsoft", "oidc"]:
+                response = self.fast_api_client.get(
+                    self.create_url(f"/oauth/{provider}/login")
+                )
+                # Should either redirect (if provider configured) or 404 (if not configured)
+                assert response.status_code in [302, 404]
+
+
+class TestOAuthExclusive(AbstractPostgresTest):
+    BASE_PATH = "/api/v1/auths"
+
+    def setup_class(cls):
+        super().setup_class()
+        from open_webui.apps.webui.models.auths import Auths
+        from open_webui.apps.webui.models.users import Users
+        cls.users = Users
+        cls.auths = Auths
+
+    @mock.patch("open_webui.config.OAUTH_EXCLUSIVE_AUTH.value", True)
+    def test_local_auth_endpoints_blocked(self):
+        # Test that all local auth endpoints return 404
+        endpoints = [
+            ("/signin", "POST", {"email": "test@test.com", "password": "test"}),
+            ("/signup", "POST", {"email": "test@test.com", "password": "test", "name": "Test"}),
+            ("/update/password", "POST", {"password": "old", "new_password": "new"}),
+            ("/add", "POST", {"email": "test@test.com", "password": "test", "name": "Test", "role": "user"})
+        ]
+        
+        for path, method, data in endpoints:
+            response = getattr(self.fast_api_client, method.lower())(
+                self.create_url(path),
+                json=data
+            )
+            assert response.status_code == 404, f"Endpoint {path} should return 404 in exclusive mode"
+
+    @mock.patch("open_webui.config.OAUTH_EXCLUSIVE_AUTH.value", True)
+    @mock.patch("open_webui.config.ENABLE_OAUTH_ROLE_MANAGEMENT", True)
+    def test_oauth_role_management(self):
+        # Mock OAuth callback data with roles
+        mock_token = {
+            "userinfo": {
+                "sub": "123",
+                "email": "test@test.com",
+                "roles": ["admin"],
+                "name": "Test User"
+            }
+        }
+        
+        with mock.patch("authlib.integrations.starlette_client.OAuth2App.authorize_access_token", 
+                       return_value=mock_token):
+            response = self.fast_api_client.get(
+                self.create_url("/oauth/oidc/callback"),
+                params={"code": "test_code", "state": "test_state"}
+            )
+            
+        assert response.status_code == 200
+        data = response.json()
+        assert data["role"] == "admin"  # Role should be taken from OAuth claims

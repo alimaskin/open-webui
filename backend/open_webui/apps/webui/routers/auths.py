@@ -3,6 +3,7 @@ import uuid
 import time
 import datetime
 import logging
+import aiohttp
 
 from open_webui.apps.webui.models.auths import (
     AddUserForm,
@@ -29,7 +30,7 @@ from open_webui.env import (
     SRC_LOG_LEVELS,
 )
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import Response
+from fastapi.responses import Response, RedirectResponse
 from pydantic import BaseModel
 from open_webui.utils.misc import parse_duration, validate_email_format
 from open_webui.utils.utils import (
@@ -48,6 +49,8 @@ from typing import Optional, List
 from ssl import CERT_REQUIRED, PROTOCOL_TLS
 from ldap3 import Server, Connection, ALL, Tls
 from ldap3.utils.conv import escape_filter_chars
+
+from open_webui.config import OAUTH_EXCLUSIVE_AUTH, OPENID_PROVIDER_URL, FRONTEND_URL
 
 router = APIRouter()
 
@@ -300,9 +303,19 @@ async def ldap_auth(request: Request, response: Response, form_data: LdapForm):
 # SignIn
 ############################
 
+def check_local_auth_allowed():
+    """Check if local authentication is allowed"""
+    if OAUTH_EXCLUSIVE_AUTH.value:
+        raise HTTPException(
+            status_code=404,
+            detail="Local authentication is disabled in exclusive OAuth mode"
+        )
 
 @router.post("/signin", response_model=SessionUserResponse)
 async def signin(request: Request, response: Response, form_data: SigninForm):
+    # Block local auth in exclusive mode
+    check_local_auth_allowed()
+
     if WEBUI_AUTH_TRUSTED_EMAIL_HEADER:
         if WEBUI_AUTH_TRUSTED_EMAIL_HEADER not in request.headers:
             raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_TRUSTED_HEADER)
@@ -396,6 +409,9 @@ async def signin(request: Request, response: Response, form_data: SigninForm):
 
 @router.post("/signup", response_model=SessionUserResponse)
 async def signup(request: Request, response: Response, form_data: SignupForm):
+    # Block local auth in exclusive mode
+    check_local_auth_allowed()
+
     if WEBUI_AUTH:
         if (
             not request.app.state.config.ENABLE_SIGNUP
@@ -497,8 +513,33 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
         raise HTTPException(500, detail=ERROR_MESSAGES.DEFAULT(err))
 
 
+async def get_openid_configuration():
+    """Get OpenID configuration from provider"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(OPENID_PROVIDER_URL.value) as response:
+                return await response.json()
+    except Exception as e:
+        log.error(f"Failed to get OpenID configuration: {e}")
+        return {}
+
+
 @router.get("/signout")
-async def signout(response: Response):
+async def signout(request: Request, response: Response):
+    if OAUTH_EXCLUSIVE_AUTH:
+        try:
+            config = await get_openid_configuration()
+            end_session_endpoint = config.get("end_session_endpoint")
+            
+            if end_session_endpoint:
+                response.delete_cookie("token")
+                redirect_uri = f"{FRONTEND_URL.value}/auth"
+                logout_url = f"{end_session_endpoint}?post_logout_redirect_uri={redirect_uri}"                
+                return {"redirect_url": logout_url}
+                
+        except Exception as e:
+            log.error(f"Failed to get end session endpoint: {e}")
+    
     response.delete_cookie("token")
     return {"status": True}
 
@@ -510,6 +551,9 @@ async def signout(response: Response):
 
 @router.post("/add", response_model=SigninResponse)
 async def add_user(form_data: AddUserForm, user=Depends(get_admin_user)):
+    # Block local auth in exclusive mode
+    check_local_auth_allowed()
+
     if not validate_email_format(form_data.email.lower()):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.INVALID_EMAIL_FORMAT

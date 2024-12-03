@@ -108,14 +108,58 @@
 	let onboarding = false;
 
 	onMount(async () => {
-		if ($user !== undefined) {
-			await goto('/');
-		}
+		const logs = JSON.parse(localStorage.getItem('debug_logs') || '[]');
+		
+		logs.push({
+			time: new Date().toISOString(),
+			page: 'auth',
+			user: $user,
+			config: $config?.oauth,
+			hash: $page.url.hash
+		});
+		
+		localStorage.setItem('debug_logs', JSON.stringify(logs));
+
 		await checkOauthCallback();
+		
+		logs.push({
+			time: new Date().toISOString(),
+			page: 'auth',
+			event: 'after callback',
+			user: $user
+		});
+		localStorage.setItem('debug_logs', JSON.stringify(logs));
+
+		if ($user !== undefined) {
+			logs.push({
+				time: new Date().toISOString(),
+				page: 'auth',
+				event: 'user exists, redirecting to /'
+			});
+			localStorage.setItem('debug_logs', JSON.stringify(logs));
+			await goto('/');
+			return;
+		}
+
+		if ($config?.oauth?.exclusive_auth && 
+			Object.keys($config?.oauth?.providers ?? {}).length === 1 &&
+				($user === undefined || $user?.role !== 'pending')) {
+			logs.push({
+				time: new Date().toISOString(),
+				page: 'auth',
+				event: 'exclusive auth redirect',
+				userRole: $user?.role
+			});
+			localStorage.setItem('debug_logs', JSON.stringify(logs));
+			
+			const provider = Object.keys($config.oauth.providers)[0];
+			window.location.href = `${WEBUI_BASE_URL}/oauth/${provider}/login`;
+			return;
+		}
 
 		loaded = true;
 		if (($config?.features.auth_trusted_header ?? false) || $config?.features.auth === false) {
-			await signInHandler();
+				await signInHandler();
 		} else {
 			onboarding = $config?.onboarding ?? false;
 		}
@@ -218,7 +262,6 @@
 											/>
 										</div>
 									{/if}
-
 									{#if mode === 'ldap'}
 										<div class="mb-2">
 											<div class=" text-sm font-medium text-left mb-1">{$i18n.t('Username')}</div>
@@ -429,3 +472,4 @@
 		</div>
 	{/if}
 </div>
+

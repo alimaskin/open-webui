@@ -429,9 +429,30 @@ OAUTH_ADMIN_ROLES = PersistentConfig(
     [role.strip() for role in os.environ.get("OAUTH_ADMIN_ROLES", "admin").split(",")],
 )
 
+OAUTH_EXCLUSIVE_AUTH = PersistentConfig(
+    "OAUTH_EXCLUSIVE_AUTH",
+    "oauth.exclusive_auth",
+    os.environ.get("OAUTH_EXCLUSIVE_AUTH", "False").lower() == "true",
+)
+
 
 def load_oauth_providers():
     OAUTH_PROVIDERS.clear()
+    
+    if OAUTH_EXCLUSIVE_AUTH.value:
+        if not (OAUTH_CLIENT_ID.value and OAUTH_CLIENT_SECRET.value and OPENID_PROVIDER_URL.value):
+            raise ValueError("OIDC provider configuration is required when OAUTH_EXCLUSIVE_AUTH is enabled")
+            
+        OAUTH_PROVIDERS["oidc"] = {
+            "client_id": OAUTH_CLIENT_ID.value,
+            "client_secret": OAUTH_CLIENT_SECRET.value,
+            "server_metadata_url": OPENID_PROVIDER_URL.value,
+            "scope": OAUTH_SCOPES.value,
+            "name": OAUTH_PROVIDER_NAME.value,
+            "redirect_uri": OPENID_REDIRECT_URI.value,
+        }
+        return
+        
     if GOOGLE_CLIENT_ID.value and GOOGLE_CLIENT_SECRET.value:
         OAUTH_PROVIDERS["google"] = {
             "client_id": GOOGLE_CLIENT_ID.value,
