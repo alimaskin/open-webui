@@ -37,6 +37,11 @@ export default defineConfig({
 				target: process.env.VITE_API_TARGET || 'http://localhost:8080',
 				changeOrigin: true,
 				rewrite: (path) => path.replace(/^\/api/, '/api')
+			},
+			'/oauth': {
+				target: process.env.VITE_API_TARGET || 'http://localhost:8080',
+				changeOrigin: true,
+				rewrite: (path) => path.replace(/^\/oauth/, '/oauth')
 			}
 		}
 	}

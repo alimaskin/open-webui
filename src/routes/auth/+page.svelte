@@ -401,6 +401,20 @@
 										>
 									</button>
 								{/if}
+								{#if $config?.oauth?.providers?.yandex}
+									<button
+										class="flex justify-center items-center bg-gray-700/5 hover:bg-gray-700/10 dark:bg-gray-100/5 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition w-full rounded-full font-medium text-sm py-2.5"
+										on:click={() => {
+											window.location.href = `${WEBUI_BASE_URL}/oauth/yandex/login`;
+										}}
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" class="size-6 mr-3">
+											<path fill="#FC3F1D" d="M89.96 180c49.68 0 90-40.32 90-90S139.64 0 89.96 0 0 40.32 0 90s40.32 90 89.96 90Z"/>
+											<path fill="#fff" d="M89.96 52.83c-9.83 0-18.22 7.72-18.22 19.66 0 11.47 7.86 24.13 18.22 35.33 10.36-11.2 18.22-23.86 18.22-35.33 0-11.94-8.39-19.66-18.22-19.66Zm0 87.05c-15.4-15.75-27.23-33.67-27.23-51.8C62.73 68.13 74.56 57 89.96 57c15.4 0 27.23 11.13 27.23 31.08 0 18.13-11.83 36.05-27.23 51.8Z"/>
+										</svg>
+										<span>{$i18n.t('Continue with {{provider}}', { provider: 'Yandex' })}</span>
+									</button>
+								{/if}
 							</div>
 						{/if}
 

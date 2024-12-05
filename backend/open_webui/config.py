@@ -280,6 +280,10 @@ JWT_EXPIRES_IN = PersistentConfig(
 # OAuth config
 ####################################
 
+# OAuth provider types
+OAUTH_TYPE_OIDC = "oidc"  # OpenID Connect providers (Google, Microsoft)
+OAUTH_TYPE_OAUTH2 = "oauth2"  # Standard OAuth2 providers (Yandex, GitHub, etc.)
+
 ENABLE_OAUTH_SIGNUP = PersistentConfig(
     "ENABLE_OAUTH_SIGNUP",
     "oauth.enable_signup",
@@ -346,6 +350,30 @@ MICROSOFT_REDIRECT_URI = PersistentConfig(
     "MICROSOFT_REDIRECT_URI",
     "oauth.microsoft.redirect_uri",
     os.environ.get("MICROSOFT_REDIRECT_URI", ""),
+)
+
+YANDEX_CLIENT_ID = PersistentConfig(
+    "YANDEX_CLIENT_ID",
+    "oauth.yandex.client_id", 
+    os.environ.get("YANDEX_CLIENT_ID", ""),
+)
+
+YANDEX_CLIENT_SECRET = PersistentConfig(
+    "YANDEX_CLIENT_SECRET",
+    "oauth.yandex.client_secret",
+    os.environ.get("YANDEX_CLIENT_SECRET", ""),
+)
+
+YANDEX_REDIRECT_URI = PersistentConfig(
+    "YANDEX_REDIRECT_URI",
+    "oauth.yandex.redirect_uri",
+    os.environ.get("YANDEX_REDIRECT_URI", ""),
+)
+
+YANDEX_OAUTH_SCOPE = PersistentConfig(
+    "YANDEX_OAUTH_SCOPE",
+    "oauth.yandex.scope",
+    os.environ.get("YANDEX_OAUTH_SCOPE", "login:email login:info"),
 )
 
 OAUTH_CLIENT_ID = PersistentConfig(
@@ -466,6 +494,24 @@ def load_oauth_providers():
             "scope": OAUTH_SCOPES.value,
             "name": OAUTH_PROVIDER_NAME.value,
             "redirect_uri": OPENID_REDIRECT_URI.value,
+        }
+
+    if YANDEX_CLIENT_ID.value and YANDEX_CLIENT_SECRET.value:
+        OAUTH_PROVIDERS["yandex"] = {
+            "client_id": YANDEX_CLIENT_ID.value,
+            "client_secret": YANDEX_CLIENT_SECRET.value,
+            "authorize_url": "https://oauth.yandex.ru/authorize",
+            "token_url": "https://oauth.yandex.ru/token",
+            "userinfo_url": "https://login.yandex.ru/info",
+            "scope": YANDEX_OAUTH_SCOPE.value,
+            "redirect_uri": YANDEX_REDIRECT_URI.value,
+            "oauth_type": OAUTH_TYPE_OAUTH2,
+            "userinfo_mapping": {
+                "sub": "id",
+                "email": "default_email",
+                "name": "real_name",
+                "picture": None
+            }
         }
 
 
