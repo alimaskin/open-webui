@@ -501,7 +501,7 @@ def load_oauth_providers():
             "client_id": YANDEX_CLIENT_ID.value,
             "client_secret": YANDEX_CLIENT_SECRET.value,
             "authorize_url": "https://oauth.yandex.ru/authorize",
-            "token_url": "https://oauth.yandex.ru/token",
+            "token_endpoint": "https://oauth.yandex.ru/token",
             "userinfo_url": "https://login.yandex.ru/info",
             "scope": YANDEX_OAUTH_SCOPE.value,
             "redirect_uri": YANDEX_REDIRECT_URI.value,
