@@ -5,6 +5,7 @@ import uuid
 
 import aiohttp
 from authlib.integrations.starlette_client import OAuth
+from authlib.integrations.base_client import OAuthError
 from authlib.oidc.core import UserInfo
 from fastapi import (
     HTTPException,
@@ -26,6 +27,7 @@ from open_webui.config import (
     OAUTH_USERNAME_CLAIM,
     OAUTH_ALLOWED_ROLES,
     OAUTH_ADMIN_ROLES,
+    OAUTH_TYPE_OAUTH2,
     WEBHOOK_URL,
     FRONTEND_URL,
     JWT_EXPIRES_IN,
@@ -57,16 +59,72 @@ class OAuthManager:
     def __init__(self):
         self.oauth = OAuth()
         for provider_name, provider_config in OAUTH_PROVIDERS.items():
-            self.oauth.register(
-                name=provider_name,
-                client_id=provider_config["client_id"],
-                client_secret=provider_config["client_secret"],
-                server_metadata_url=provider_config["server_metadata_url"],
-                client_kwargs={
-                    "scope": provider_config["scope"],
-                },
-                redirect_uri=provider_config["redirect_uri"],
+            oauth_type = provider_config.get("oauth_type")
+            
+            if oauth_type == "oauth2":
+                self.oauth.register(
+                    name=provider_name,
+                    client_id=provider_config["client_id"],
+                    client_secret=provider_config["client_secret"],
+                    authorize_url=provider_config["authorize_url"],
+                    access_token_url=provider_config["token_endpoint"],
+                    client_kwargs={
+                        "scope": provider_config["scope"],
+                    },
+                    redirect_uri=provider_config["redirect_uri"],
+                )
+            else:  # OIDC providers
+                self.oauth.register(
+                    name=provider_name,
+                    client_id=provider_config["client_id"],
+                    client_secret=provider_config["client_secret"],
+                    server_metadata_url=provider_config["server_metadata_url"],
+                    client_kwargs={
+                        "scope": provider_config["scope"],
+                    },
+                    redirect_uri=provider_config["redirect_uri"],
+                )
+
+    async def _fetch_oauth2_token(self, provider: str, request):
+        client = self.get_client(provider)
+        try:
+            return await client.authorize_access_token(request)
+        except Exception as e:
+            log.warning(f"OAuth2 token fetch error: {e}")
+            frontend_base = FRONTEND_URL.value if FRONTEND_URL.value else str(request.base_url).rstrip('/')
+            return RedirectResponse(
+                url=f"{frontend_base}/auth?error={ERROR_MESSAGES.INVALID_CRED}"
             )
+
+    async def _fetch_oauth2_userinfo(self, provider: str, token):
+        provider_config = OAUTH_PROVIDERS[provider]
+        userinfo_url = provider_config.get("userinfo_url")
+        
+        headers = {"Authorization": f"OAuth {token['access_token']}"}
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(userinfo_url, headers=headers) as resp:
+                    if resp.status != 200:
+                        frontend_base = FRONTEND_URL.value if FRONTEND_URL.value else str(request.base_url).rstrip('/')
+                        return RedirectResponse(
+                            url=f"{frontend_base}/auth?error={ERROR_MESSAGES.INVALID_CRED}"
+                        )
+                    return await resp.json()
+        except aiohttp.ClientError:
+            frontend_base = FRONTEND_URL.value if FRONTEND_URL.value else str(request.base_url).rstrip('/')
+            return RedirectResponse(
+                url=f"{frontend_base}/auth?error={ERROR_MESSAGES.INVALID_CRED}"
+            )
+
+    def _map_oauth2_userinfo(self, provider: str, user_info: dict) -> dict:
+        provider_config = OAUTH_PROVIDERS[provider]
+        mapping = provider_config.get("userinfo_mapping", {})
+        
+        return {
+            claim: user_info.get(provider_field)
+            for claim, provider_field in mapping.items()
+            if provider_field is not None
+        }
 
     def get_client(self, provider_name):
         return self.oauth.create_client(provider_name)
@@ -132,13 +190,30 @@ class OAuthManager:
     async def handle_callback(self, provider, request, response):
         if provider not in OAUTH_PROVIDERS:
             raise HTTPException(404)
-        client = self.get_client(provider)
-        try:
-            token = await client.authorize_access_token(request)
-        except Exception as e:
-            log.warning(f"OAuth callback error: {e}")
-            raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
-        user_data: UserInfo = token["userinfo"]
+        
+        provider_config = OAUTH_PROVIDERS[provider]
+        
+        if provider_config.get("oauth_type") == OAUTH_TYPE_OAUTH2:
+            token = await self._fetch_oauth2_token(provider, request)
+            user_data = await self._fetch_oauth2_userinfo(provider, token)
+            if not user_data:
+                log.warning(f"OAuth2 callback failed, user data is missing: {token}")
+                raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
+            user_data = self._map_oauth2_userinfo(provider, user_data)
+        else:
+            client = self.get_client(provider)
+            try:
+                token = await client.authorize_access_token(request)
+                user_data = token.get("userinfo")
+                if not user_data:
+                    user_data = await client.userinfo(token=token)
+                if not user_data:
+                    log.warning(f"OAuth callback failed, user data is missing: {token}")
+                    raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
+            except Exception as e:
+                log.warning(f"OAuth callback error: {e}")
+                raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
+        
         if not user_data:
             user_data: UserInfo = await client.userinfo(token=token)
         if not user_data:
